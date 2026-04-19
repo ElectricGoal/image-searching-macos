@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+build/
+dist/
+*.whl
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# uv
+# (keep uv.lock tracked; ignore cache)
+.uv-cache/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Project-specific
+.imgsearch/
+model_cache/
+*.faiss
+!tests/fixtures/**
+
+# Image directories
+images/
+imgs/
+pics/
+
+# HuggingFace cache (local dev)
+.hf_cache/
