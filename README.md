@@ -67,6 +67,47 @@ imgsearch search ~/Pictures --image ~/Desktop/reference.jpg -k 5
 imgsearch search ~/Pictures -t "sunset" --json | jq '.[0].path'
 ```
 
+### Find and remove duplicate images
+
+```bash
+# Dry run — show duplicate groups, no files changed (default)
+imgsearch dedup ~/Pictures
+
+# Stricter threshold (default 0.98, range 0.5–1.0)
+imgsearch dedup ~/Pictures --threshold 0.995
+
+# Only find exact byte-for-byte duplicates (SHA-1), no embedding comparison
+imgsearch dedup ~/Pictures --exact-only
+
+# Move duplicates to a quarantine folder (safer than delete)
+imgsearch dedup ~/Pictures --move-to ~/Desktop/duplicates --no-dry-run
+
+# Delete duplicates, keep the largest file, skip confirmation
+imgsearch dedup ~/Pictures --delete --keep largest --force
+```
+
+Two levels of detection — no model reload required:
+
+- **Exact**: SHA-1 hash match (same file, different name/location) — instant, zero false positives
+- **Similar**: cosine similarity on stored embeddings (same scene, different compression/crop) — no model reload needed
+
+Keep strategies: `largest` (default), `newest`, `oldest`, `highest-res`.
+
+Example output:
+
+```
+Found 3 duplicate group(s) — 5 redundant image(s)
+
+Group 1 — exact (SHA-1)
+  ✓ KEEP  /Users/you/Pictures/IMG_1234.jpg     3.2 MB
+    DUP   /Users/you/Downloads/copy.jpg        3.2 MB
+
+Group 2 — similar (cosine 0.994)
+  ✓ KEEP  /Users/you/Pictures/sunset.heic      5.8 MB
+    DUP   /Users/you/Desktop/sunset_edit.jpg   1.1 MB
+    DUP   /Users/you/Desktop/sunset_small.png  412 KB
+```
+
 ### Inspect / clean
 
 ```bash
@@ -88,9 +129,11 @@ On 1,000 images on an M2 16GB laptop, indexing takes ~45s and search latency is 
 
 | Alias | HuggingFace id | Dim | Notes |
 |---|---|---|---|
-| `siglip2-base` *(default)* | `mlx-community/siglip2-base-patch16-256` | 768 | Best quality/speed trade-off |
-| `siglip-base` | `mlx-community/siglip-base-patch16-224` | 768 | Older, slightly faster |
+| `siglip-so400m` *(default)* | `mlx-community/siglip-so400m-patch14-384` | 1152 | Best retrieval quality |
+| `siglip-so400m-224` | `mlx-community/siglip-so400m-patch14-224` | 1152 | Same quality, faster indexing |
+| `siglip2-base-8bit` | `mlx-community/siglip2-base-patch16-224-8bit` | 768 | Quantized, lowest RAM usage |
 | `clip-vit-b32` | `mlx-community/clip-vit-base-patch32` | 512 | Fastest, OpenAI CLIP |
+| `clip-vit-l14` | `mlx-community/clip-vit-large-patch14` | 768 | Strong CLIP alternative |
 
 Change with `imgsearch index <folder> --model clip-vit-b32`. Once indexed, the manifest remembers the model id so subsequent searches use the same one.
 

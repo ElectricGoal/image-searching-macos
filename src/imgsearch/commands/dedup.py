@@ -161,17 +161,19 @@ def _print_groups(root: Path, groups) -> None:
         table.add_column("info", style="dim")
 
         keeper_abs = root / group.keeper
-        table.add_row("[green]✓ KEEP[/green]", group.keeper, _file_info(keeper_abs))
+        table.add_row("[green]✓ KEEP[/green]", str(keeper_abs), _file_info(keeper_abs))
         for dup in group.duplicates:
-            table.add_row("[red]  DUP[/red]", dup, _file_info(root / dup))
+            dup_abs = root / dup
+            table.add_row("[red]  DUP[/red]", str(dup_abs), _file_info(dup_abs))
         console.print(table)
 
 
 def _file_info(path: Path) -> str:
     try:
-        st = path.stat()
-        mb = st.st_size / 1_048_576
-        return f"{mb:.1f} MB"
+        size = path.stat().st_size
+        if size >= 1_048_576:
+            return f"{size / 1_048_576:.1f} MB"
+        return f"{size / 1024:.0f} KB"
     except OSError:
         return "missing"
 
