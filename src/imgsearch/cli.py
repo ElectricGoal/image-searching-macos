@@ -6,6 +6,7 @@ import typer
 
 from imgsearch import __version__
 from imgsearch.commands import clean as clean_cmd
+from imgsearch.commands import dedup as dedup_cmd
 from imgsearch.commands import index as index_cmd
 from imgsearch.commands import search as search_cmd
 from imgsearch.commands import status as status_cmd
@@ -19,6 +20,7 @@ app = typer.Typer(
 
 app.command("index", help="Build or update the index for a folder.")(index_cmd.run)
 app.command("search", help="Search a folder by text or image.")(search_cmd.run)
+app.command("dedup", help="Find and remove duplicate images.")(dedup_cmd.run)
 app.command("status", help="Show index info for a folder.")(status_cmd.run)
 app.command("clean", help="Remove the index directory from a folder.")(clean_cmd.run)
 
