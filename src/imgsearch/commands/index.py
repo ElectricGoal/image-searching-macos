@@ -29,7 +29,7 @@ from imgsearch.commands._common import (
     resolve_model_arg,
 )
 from imgsearch.config import DEFAULT_BATCH_SIZE
-from imgsearch.core.embedder import MLXEmbedder
+from imgsearch.core.embedder import EmbedderProtocol, create_embedder
 from imgsearch.core.index import Index
 from imgsearch.core.preprocess import ImageLoadError, PreparedImage, load_and_prepare
 from imgsearch.core.scanner import DiscoveredFile, scan
@@ -58,7 +58,7 @@ def run(
         f"[bold]imgsearch[/bold] indexing [cyan]{folder}[/cyan] with [green]{spec.display_name}[/green]"
     )
 
-    embedder = MLXEmbedder(spec)
+    embedder = create_embedder(spec)
     with Index(folder, spec, alias) as index:
         index.open(create=True)
 
@@ -181,7 +181,7 @@ def _prefetch_batches(
 
 
 def _embed_prepared(
-    embedder: MLXEmbedder,
+    embedder: EmbedderProtocol,
     entries: list[_PreparedEntry | None],
 ) -> tuple[
     list[DiscoveredFile],

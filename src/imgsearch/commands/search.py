@@ -16,7 +16,7 @@ from imgsearch.commands._common import (
     resolve_model_arg,
 )
 from imgsearch.config import DEFAULT_TOP_K
-from imgsearch.core.embedder import MLXEmbedder
+from imgsearch.core.embedder import create_embedder
 from imgsearch.core.index import Index
 
 
@@ -39,7 +39,7 @@ def run(
     folder = resolve_folder(folder)
     alias, spec = resolve_model_arg(model)
 
-    embedder = MLXEmbedder(spec)
+    embedder = create_embedder(spec)
     with Index(folder, spec, alias) as index:
         index.open(create=False)
 

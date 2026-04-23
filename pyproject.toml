@@ -24,15 +24,31 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
+    # MLX backend (SigLIP / CLIP models)
     "mlx>=0.20",
     "mlx-embeddings>=0.0.5",
+    # MobileCLIP backend (PyTorch MPS on Apple Silicon)
+    "torch>=2.2",
+    "open-clip-torch>=2.24",
+    # Vector store & indexing
     "faiss-cpu>=1.8.0",
+    # Image I/O
     "Pillow>=10.3",
     "pillow-heif>=0.18",
+    # CLI & display
     "typer>=0.12",
     "rich>=13.7",
+    # Shared
     "numpy>=1.26,<3",
     "huggingface-hub>=0.25",
+]
+
+[project.optional-dependencies]
+# MobileCLIP-S4 (default model). Install separately because the upstream
+# package uses direct git references in its own deps, which some build
+# backends reject when resolving transitively.
+mobileclip = [
+    "mobileclip @ git+https://github.com/apple/ml-mobileclip.git",
 ]
 
 [project.scripts]
@@ -48,6 +64,9 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/toxu/imgsearch"
 Issues = "https://github.com/toxu/imgsearch/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/imgsearch"]

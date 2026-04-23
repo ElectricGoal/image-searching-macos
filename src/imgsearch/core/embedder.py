@@ -170,6 +170,97 @@ class MLXEmbedder:
         return _l2_normalize(arr)
 
 
+class MobileCLIPEmbedder:
+    """Production embedder backed by Apple MobileCLIP via open_clip + PyTorch MPS."""
+
+    def __init__(self, spec: ModelSpec) -> None:
+        self.spec = spec
+        self._model: Any = None
+        self._preprocess: Any = None
+        self._tokenizer: Any = None
+        self._device: Any = None
+
+    def load(self) -> None:
+        """Download (if needed) and load model. Idempotent."""
+        if self._model is not None:
+            return
+        try:
+            import torch  # type: ignore[import-not-found]
+            import open_clip  # type: ignore[import-not-found]
+            from mobileclip.modules.common.mobileone import reparameterize_model  # type: ignore[import-not-found]
+        except ImportError as exc:
+            raise RuntimeError(
+                "MobileCLIP requires torch, open-clip-torch, and ml-mobileclip. "
+                "Install with: pip install torch open-clip-torch "
+                "'ml-mobileclip @ git+https://github.com/apple/ml-mobileclip.git'"
+            ) from exc
+
+        self._device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        model, _, preprocess = open_clip.create_model_from_pretrained(
+            f"hf-hub:{self.spec.id}"
+        )
+        model = reparameterize_model(model)
+        model.eval().to(self._device)
+        self._model = model
+        self._preprocess = preprocess
+        self._tokenizer = open_clip.get_tokenizer(f"hf-hub:{self.spec.id}")
+
+    def encode_images(self, paths: Sequence[Path]) -> np.ndarray:
+        """Encode image files from disk. Returns (N, dim) L2-normalized float32."""
+        if not paths:
+            return np.zeros((0, self.spec.dim), dtype=np.float32)
+        self.load()
+        images = [load_rgb(p) for p in paths]
+        return self.encode_pil(images)
+
+    def encode_pil(self, images: Sequence[Any]) -> np.ndarray:
+        """Encode pre-loaded PIL images. Returns (N, dim) L2-normalized float32."""
+        if not images:
+            return np.zeros((0, self.spec.dim), dtype=np.float32)
+        self.load()
+        import torch  # type: ignore[import-not-found]
+
+        tensors = torch.stack([self._preprocess(img) for img in images]).to(self._device)
+        with torch.no_grad():
+            feats = self._model.encode_image(tensors)
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+        arr = feats.cpu().float().numpy()
+        if arr.ndim != 2 or arr.shape[1] != self.spec.dim:
+            raise RuntimeError(
+                f"Unexpected image feature shape {arr.shape}, "
+                f"expected (*, {self.spec.dim})"
+            )
+        return arr.astype(np.float32, copy=False)
+
+    def encode_text(self, text: str) -> np.ndarray:
+        """Encode a single text query. Returns (dim,) L2-normalized float32."""
+        if not text or not text.strip():
+            raise ValueError("text query must be non-empty")
+        self.load()
+        import torch  # type: ignore[import-not-found]
+
+        tokens = self._tokenizer([text]).to(self._device)
+        with torch.no_grad():
+            feats = self._model.encode_text(tokens)
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+        arr = feats.cpu().float().numpy()
+        if arr.ndim == 2:
+            arr = arr[0]
+        if arr.shape[0] != self.spec.dim:
+            raise RuntimeError(
+                f"Unexpected text feature shape {arr.shape}, "
+                f"expected ({self.spec.dim},)"
+            )
+        return arr.astype(np.float32, copy=False)
+
+
+def create_embedder(spec: ModelSpec) -> MLXEmbedder | MobileCLIPEmbedder:
+    """Factory: return the correct embedder for the given ModelSpec."""
+    if spec.family == "mobileclip":
+        return MobileCLIPEmbedder(spec)
+    return MLXEmbedder(spec)
+
+
 def _extract_image_embeds(outputs: Any) -> Any:
     """Pull image embeddings out of a variety of output container shapes."""
     for name in ("image_embeds", "vision_embeds", "pooler_output", "last_hidden_state"):

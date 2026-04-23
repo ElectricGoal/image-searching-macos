@@ -25,14 +25,24 @@ class ModelSpec:
     id: str  # HuggingFace repo id
     dim: int  # output embedding dimension
     image_size: int  # square input resolution expected by preprocessor
-    family: str  # "siglip" | "clip"
+    family: str  # "mobileclip" | "siglip" | "clip"
     display_name: str
 
 
 # Registry of supported models. Keys are short aliases used by --model.
-# All IDs are verified to exist on HuggingFace under mlx-community as of 2026-04.
 MODEL_REGISTRY: Final[dict[str, ModelSpec]] = {
-    # Confirmed working with mlx-embeddings load(). Best quality, ~1.7 GB weights.
+    # ── MobileCLIP (PyTorch + MPS) ──────────────────────────────────────────
+    # Apple's fastest high-quality CLIP variant. Uses PyTorch MPS (Apple GPU).
+    # Requires open-clip-torch + ml-mobileclip. dim=768, image_size=256.
+    "mobileclip-s4": ModelSpec(
+        id="apple/MobileCLIP-S4",
+        dim=768,
+        image_size=256,
+        family="mobileclip",
+        display_name="MobileCLIP-S4 (Apple)",
+    ),
+    # ── SigLIP (MLX) ────────────────────────────────────────────────────────
+    # Confirmed working with mlx-embeddings. Best quality in the MLX family.
     "siglip-so400m": ModelSpec(
         id="mlx-community/siglip-so400m-patch14-384",
         dim=1152,
@@ -40,7 +50,6 @@ MODEL_REGISTRY: Final[dict[str, ModelSpec]] = {
         family="siglip",
         display_name="SigLIP SO400M (patch14, 384)",
     ),
-    # Smaller SigLIP, faster indexing, still strong retrieval quality.
     "siglip-so400m-224": ModelSpec(
         id="mlx-community/siglip-so400m-patch14-224",
         dim=1152,
@@ -48,7 +57,6 @@ MODEL_REGISTRY: Final[dict[str, ModelSpec]] = {
         family="siglip",
         display_name="SigLIP SO400M (patch14, 224)",
     ),
-    # 8-bit quantized SigLIP2 base — lowest RAM, fastest, good quality.
     "siglip2-base-8bit": ModelSpec(
         id="mlx-community/siglip2-base-patch16-224-8bit",
         dim=768,
@@ -56,7 +64,7 @@ MODEL_REGISTRY: Final[dict[str, ModelSpec]] = {
         family="siglip",
         display_name="SigLIP2 Base 8-bit (patch16, 224)",
     ),
-    # OpenAI CLIP — fastest inference, lowest RAM, widest compatibility.
+    # ── CLIP (MLX) ──────────────────────────────────────────────────────────
     "clip-vit-b32": ModelSpec(
         id="mlx-community/clip-vit-base-patch32",
         dim=512,
@@ -73,7 +81,7 @@ MODEL_REGISTRY: Final[dict[str, ModelSpec]] = {
     ),
 }
 
-DEFAULT_MODEL_ALIAS: Final = "siglip-so400m"
+DEFAULT_MODEL_ALIAS: Final = "mobileclip-s4"
 DEFAULT_BATCH_SIZE: Final = 16
 DEFAULT_TOP_K: Final = 10
 
