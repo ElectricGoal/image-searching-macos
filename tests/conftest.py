@@ -31,11 +31,13 @@ def tmp_image_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def fake_spec() -> ModelSpec:
     return ModelSpec(
+        alias="fake",
         id="test/fake-model",
         dim=8,
         image_size=16,
         family="test",
         display_name="Fake Model",
+        backend="test",
     )
 
 

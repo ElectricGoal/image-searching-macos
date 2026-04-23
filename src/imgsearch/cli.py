@@ -13,7 +13,7 @@ from imgsearch.commands import status as status_cmd
 
 app = typer.Typer(
     name="imgsearch",
-    help="Semantic image search for macOS — MLX-accelerated.",
+    help="Semantic image search with automatic backend selection.",
     no_args_is_help=True,
     add_completion=True,
 )
@@ -42,7 +42,7 @@ def main(
         help="Show version and exit.",
     ),
 ) -> None:
-    """imgsearch — semantic image search for macOS."""
+    """imgsearch — semantic image search for macOS and Linux."""
 
 
 if __name__ == "__main__":  # pragma: no cover

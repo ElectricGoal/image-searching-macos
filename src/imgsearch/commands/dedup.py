@@ -13,8 +13,8 @@ from imgsearch.commands._common import (
     err_console,
     preflight,
     resolve_folder,
-    resolve_model_arg,
 )
+from imgsearch.config import resolve_model
 from imgsearch.core.duplicate_finder import build_groups, find_exact_groups, find_near_groups
 from imgsearch.core.index import Index
 from imgsearch.core.manifest import Manifest
@@ -66,10 +66,10 @@ def run(
 
     manifest = Manifest.load(manifest_path)
     try:
-        _, spec = resolve_model_arg(manifest.model_alias or manifest.model_id)
-    except typer.Exit:
+        spec = resolve_model(manifest.model_id)
+    except ValueError:
         err_console.print("[red]error:[/red] could not resolve model from manifest")
-        raise
+        raise typer.Exit(code=2)
 
     with Index(folder, spec, manifest.model_alias) as idx:
         idx.open(create=False)

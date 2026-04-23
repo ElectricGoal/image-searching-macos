@@ -5,17 +5,18 @@ build-backend = "hatchling.build"
 [project]
 name = "imgsearch"
 version = "0.1.0"
-description = "Semantic image search CLI for macOS, accelerated by MLX"
+description = "Semantic image search CLI for macOS and Linux"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "toxu" }]
-keywords = ["mlx", "clip", "siglip", "image-search", "semantic-search", "macos"]
+keywords = ["clip", "siglip", "image-search", "semantic-search", "linux", "macos"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -24,8 +25,8 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "mlx>=0.20",
-    "mlx-embeddings>=0.0.5",
+    "mlx>=0.20; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx-embeddings>=0.0.5; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "faiss-cpu>=1.8.0",
     "Pillow>=10.3",
     "pillow-heif>=0.18",
@@ -33,6 +34,15 @@ dependencies = [
     "rich>=13.7",
     "numpy>=1.26,<3",
     "huggingface-hub>=0.25",
+    "torch>=2.6; sys_platform == 'linux'",
+    "transformers>=4.51; sys_platform == 'linux'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
 ]
 
 [project.scripts]
@@ -55,9 +65,15 @@ packages = ["src/imgsearch"]
 [tool.hatch.build.targets.sdist]
 include = ["src/imgsearch", "README.md", "LICENSE", "pyproject.toml"]
 
-[tool.uv]
-# Keep MLX wheels pinned to macOS arm64 builds
-environments = ["sys_platform == 'darwin' and platform_machine == 'arm64'"]
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 100

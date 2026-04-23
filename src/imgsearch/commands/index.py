@@ -29,12 +29,12 @@ from imgsearch.commands._common import (
     resolve_model_arg,
 )
 from imgsearch.config import DEFAULT_BATCH_SIZE
-from imgsearch.core.embedder import MLXEmbedder
+from imgsearch.core.embedder import EmbedderProtocol, create_embedder
 from imgsearch.core.index import Index
 from imgsearch.core.preprocess import ImageLoadError, PreparedImage, load_and_prepare
 from imgsearch.core.scanner import DiscoveredFile, scan
 
-# Number of batches to prefetch while the GPU embeds the current one.
+# Number of batches to prefetch while the active backend embeds the current one.
 _PREFETCH_QUEUE_DEPTH = 2
 # Threads for concurrent image decode+hash+resize. PIL releases the GIL during I/O.
 _IO_WORKERS = 4
@@ -43,7 +43,10 @@ _IO_WORKERS = 4
 def run(
     folder: Path = typer.Argument(..., help="Folder to index."),
     model: str = typer.Option(
-        None, "--model", "-m", help="Model alias (siglip2-base, siglip-base, clip-vit-b32)."
+        None,
+        "--model",
+        "-m",
+        help="Model alias (siglip-so400m, siglip2-base-8bit, clip-vit-b32, clip-vit-l14).",
     ),
     batch: int = typer.Option(
         DEFAULT_BATCH_SIZE, "--batch", "-b", min=1, max=128, help="Image batch size."
@@ -58,7 +61,7 @@ def run(
         f"[bold]imgsearch[/bold] indexing [cyan]{folder}[/cyan] with [green]{spec.display_name}[/green]"
     )
 
-    embedder = MLXEmbedder(spec)
+    embedder = create_embedder(spec)
     with Index(folder, spec, alias) as index:
         index.open(create=True)
 
@@ -181,7 +184,7 @@ def _prefetch_batches(
 
 
 def _embed_prepared(
-    embedder: MLXEmbedder,
+    embedder: EmbedderProtocol,
     entries: list[_PreparedEntry | None],
 ) -> tuple[
     list[DiscoveredFile],

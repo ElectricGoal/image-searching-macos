@@ -13,8 +13,8 @@ from imgsearch.commands._common import (
     err_console,
     preflight,
     resolve_folder,
-    resolve_model_arg,
 )
+from imgsearch.config import resolve_model
 from imgsearch.core.index import Index
 from imgsearch.core.manifest import Manifest
 
@@ -34,8 +34,8 @@ def run(
 
     # Re-open the index so count is trustworthy even if manifest is stale.
     try:
-        _, spec = resolve_model_arg(manifest.model_alias or manifest.model_id)
-    except typer.Exit:
+        spec = resolve_model(manifest.model_id)
+    except ValueError:
         spec = None
 
     count = manifest.count

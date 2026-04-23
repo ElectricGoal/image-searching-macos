@@ -1,29 +1,32 @@
 # imgsearch
 
-Semantic image search CLI for macOS, accelerated by [MLX](https://github.com/ml-explore/mlx).
+Semantic image search CLI for macOS and Linux with automatic embedding backend selection.
 
-Search a folder of images using **either text or another image** as the query. Embeddings are computed once with an MLX-native CLIP/SigLIP model, stored in a hidden `.imgsearch/` directory next to your photos, and searched with FAISS.
+Search a folder of images using **either text or another image** as the query. Embeddings are computed once with a platform-appropriate CLIP/SigLIP backend, stored in a hidden `.imgsearch/` directory next to your photos, and searched with FAISS.
 
 ## Requirements
 
-- macOS 13.5+
-- Apple Silicon (M1/M2/M3/M4)
 - Python 3.11 or 3.12
+- macOS on Apple Silicon uses MLX
+- Linux uses `transformers` + `torch` via `pip`
 - ~16 GB RAM recommended (8 GB works at reduced batch size)
 
 ## Install
 
-### From PyPI (recommended for now)
+### From PyPI
 
 ```bash
-pipx install imgsearch
+pip install imgsearch
 ```
 
-### From Homebrew (once the tap is published)
+For Linux, no `apt-get` or `pacman` packages are required.
+
+If your machine only has Python 3.13 installed, create a Python 3.11 or 3.12 environment first.
+
+### macOS notes
 
 ```bash
-brew tap toxu/imgsearch
-brew install imgsearch
+pip install imgsearch
 ```
 
 ## Usage
@@ -119,21 +122,23 @@ imgsearch clean ~/Pictures        # removes the .imgsearch/ directory
 
 1. `scanner.py` walks the folder, collecting supported image files and their mtimes.
 2. `index.plan()` compares mtime (fast path) then SHA-1 (slow path) against the existing metadata DB and decides what to re-embed.
-3. `MLXEmbedder` runs a SigLIP2/CLIP model on Apple's MLX framework and returns L2-normalized float32 vectors.
+3. The embedder backend is selected automatically:
+   - macOS arm64: MLX via `mlx-embeddings`
+   - Linux: `transformers` + `torch` with CUDA when available, otherwise CPU
 4. `VectorStore` wraps a FAISS `IndexIDMap2(IndexFlatIP)` — exact brute-force cosine search, no training, crash-safe atomic writes.
 5. `MetaStore` is a small SQLite database holding the mapping from FAISS id to file path, plus hashes and mtimes.
 
-On 1,000 images on an M2 16GB laptop, indexing takes ~45s and search latency is sub-millisecond.
+On 1,000 images on an M2 16GB laptop, indexing takes ~45s and search latency is sub-millisecond. Linux performance depends on whether `torch` runs on CPU or CUDA.
 
 ## Supported models
 
 | Alias | HuggingFace id | Dim | Notes |
 |---|---|---|---|
-| `siglip-so400m` *(default)* | `mlx-community/siglip-so400m-patch14-384` | 1152 | Best retrieval quality |
-| `siglip-so400m-224` | `mlx-community/siglip-so400m-patch14-224` | 1152 | Same quality, faster indexing |
-| `siglip2-base-8bit` | `mlx-community/siglip2-base-patch16-224-8bit` | 768 | Quantized, lowest RAM usage |
-| `clip-vit-b32` | `mlx-community/clip-vit-base-patch32` | 512 | Fastest, OpenAI CLIP |
-| `clip-vit-l14` | `mlx-community/clip-vit-large-patch14` | 768 | Strong CLIP alternative |
+| `siglip-so400m` | backend-specific | 1152 | Best retrieval quality |
+| `siglip-so400m-224` | backend-specific | 1152 | Same quality, faster indexing |
+| `siglip2-base-8bit` | backend-specific | 768 | Lowest RAM on macOS, standard SigLIP2 on Linux |
+| `clip-vit-b32` *(default)* | backend-specific | 512 | Fastest, widest compatibility |
+| `clip-vit-l14` | backend-specific | 768 | Strong CLIP alternative |
 
 Change with `imgsearch index <folder> --model clip-vit-b32`. Once indexed, the manifest remembers the model id so subsequent searches use the same one.
 
@@ -141,11 +146,12 @@ Change with `imgsearch index <folder> --model clip-vit-b32`. Once indexed, the m
 
 - **"Index was built with model X"**: you're searching with a different model than you indexed with. Either pass `--model X` to match or `imgsearch clean <folder>` and re-index.
 - **Out of memory on 8 GB**: pass `--batch 4` to `index`.
-- **HEIC files fail**: make sure `pillow-heif` installed cleanly. It ships wheels for macOS arm64.
+- **Python 3.13 installed locally**: create a Python 3.11 or 3.12 environment before installing `imgsearch`.
+- **HEIC files fail**: make sure `pillow-heif` installed cleanly.
 
 ## Development
 
-This project uses [uv](https://github.com/astral-sh/uv) for dependency and environment management.
+This project uses [uv](https://github.com/astral-sh/uv) for development workflow on both macOS and Linux.
 
 ```bash
 # One-time setup: create venv and install all deps (including dev group)
@@ -156,16 +162,10 @@ uv run imgsearch --help
 
 # Run tests
 uv run pytest -q
-
-# Add a new dependency
-uv add <package>
-uv add --dev <package>
-
-# Upgrade lockfile
-uv lock --upgrade
 ```
 
-The project pins Python 3.11 via `.python-version`. `uv sync` will download a matching interpreter automatically if you don't have one. The lockfile (`uv.lock`) is committed so builds are reproducible.
+`uv sync` will use the project's Python constraint (`>=3.11,<3.13`). On this machine, that means using Python 3.11 or 3.12 rather than the system Python 3.13.
+On Linux, `uv sync` is configured to install CPU-only `torch` from PyTorch's official CPU wheel index.
 
 ## License
 

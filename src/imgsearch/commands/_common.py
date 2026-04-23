@@ -1,4 +1,4 @@
-"""Shared CLI helpers: platform guard, model resolution, Rich console."""
+"""Shared CLI helpers: runtime guard, model resolution, Rich console."""
 
 from __future__ import annotations
 

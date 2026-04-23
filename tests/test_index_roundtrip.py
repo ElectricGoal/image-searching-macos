@@ -89,7 +89,13 @@ def test_model_mismatch_refused(tmp_image_dir: Path, fake_spec: ModelSpec, fake_
         idx.commit()
 
     other = ModelSpec(
-        id="different/model", dim=8, image_size=16, family="test", display_name="Other"
+        alias="other",
+        id="different/model",
+        dim=8,
+        image_size=16,
+        family="test",
+        display_name="Other",
+        backend="test",
     )
     with pytest.raises(Exception) as excinfo:
         with Index(tmp_image_dir, other, "other") as idx:
