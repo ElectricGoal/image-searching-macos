@@ -171,7 +171,22 @@ class MLXEmbedder:
 
 
 class MobileCLIPEmbedder:
-    """Production embedder backed by Apple MobileCLIP via open_clip + PyTorch MPS."""
+    """Production embedder backed by Apple MobileCLIP via open_clip + PyTorch MPS.
+
+    Apple's MobileCLIP HF repos (e.g. apple/MobileCLIP-S4) ship a raw PyTorch
+    checkpoint (*.pt), not an open_clip config bundle. The ml-mobileclip package
+    registers the custom fastvit_mci* architectures with open_clip at import
+    time, after which open_clip.create_model_and_transforms can build the model
+    from its architecture name ("MobileCLIP2-S4") and load the checkpoint.
+    """
+
+    # Map HF repo id → (open_clip architecture name, checkpoint filename).
+    # MobileCLIP-S4 uses the MobileCLIP2-S4 architecture config (identical
+    # fastvit_mci4 encoder); only the training data/procedure differs.
+    _MODEL_MAP: dict[str, tuple[str, str]] = {
+        "apple/MobileCLIP-S4": ("MobileCLIP2-S4", "mobileclip_s4.pt"),
+        "apple/MobileCLIP2-S4": ("MobileCLIP2-S4", "mobileclip2_s4.pt"),
+    }
 
     def __init__(self, spec: ModelSpec) -> None:
         self.spec = spec
@@ -179,6 +194,19 @@ class MobileCLIPEmbedder:
         self._preprocess: Any = None
         self._tokenizer: Any = None
         self._device: Any = None
+        # Eagerly import torch here so its bundled OpenMP runtime loads *before*
+        # faiss-cpu's bundled OpenMP (imported lazily by VectorStore). Loading
+        # faiss first causes a silent SIGSEGV the first time we touch a torch
+        # tensor on macOS arm64. Running the import here — in the constructor
+        # called by commands/*.py — guarantees the correct ordering regardless
+        # of when Index() lazily imports faiss.
+        try:
+            import torch  # type: ignore[import-not-found]  # noqa: F401
+        except ImportError as exc:
+            raise RuntimeError(
+                "MobileCLIP requires torch, open-clip-torch, and ml-mobileclip. "
+                "Install with: uv sync --extra mobileclip"
+            ) from exc
 
     def load(self) -> None:
         """Download (if needed) and load model. Idempotent."""
@@ -187,23 +215,43 @@ class MobileCLIPEmbedder:
         try:
             import torch  # type: ignore[import-not-found]
             import open_clip  # type: ignore[import-not-found]
-            from mobileclip.modules.common.mobileone import reparameterize_model  # type: ignore[import-not-found]
+            import mobileclip  # type: ignore[import-not-found]  # noqa: F401  (registers architectures)
+            from mobileclip.modules.common.mobileone import (  # type: ignore[import-not-found]
+                reparameterize_model,
+            )
+            from huggingface_hub import hf_hub_download  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError(
                 "MobileCLIP requires torch, open-clip-torch, and ml-mobileclip. "
-                "Install with: pip install torch open-clip-torch "
-                "'ml-mobileclip @ git+https://github.com/apple/ml-mobileclip.git'"
+                "Install with: uv sync --extra mobileclip"
             ) from exc
 
-        self._device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-        model, _, preprocess = open_clip.create_model_from_pretrained(
-            f"hf-hub:{self.spec.id}"
+        entry = self._MODEL_MAP.get(self.spec.id)
+        if entry is None:
+            raise RuntimeError(
+                f"No MobileCLIP load recipe for HF repo {self.spec.id!r}. "
+                f"Known repos: {', '.join(self._MODEL_MAP)}"
+            )
+        arch_name, ckpt_filename = entry
+
+        ckpt_path = hf_hub_download(repo_id=self.spec.id, filename=ckpt_filename)
+
+        # Apple's README passes these kwargs; they disable open_clip's default
+        # ImageNet normalization because the MobileCLIP preprocessing pipeline
+        # already handles scaling.
+        model_kwargs = {"image_mean": (0.0, 0.0, 0.0), "image_std": (1.0, 1.0, 1.0)}
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            arch_name, pretrained=ckpt_path, **model_kwargs
         )
+        model.eval()
+        # Fuse reparameterizable branches (MobileOne / FastViT) for inference speed.
         model = reparameterize_model(model)
-        model.eval().to(self._device)
+
+        self._device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        model.to(self._device)
         self._model = model
         self._preprocess = preprocess
-        self._tokenizer = open_clip.get_tokenizer(f"hf-hub:{self.spec.id}")
+        self._tokenizer = open_clip.get_tokenizer(arch_name)
 
     def encode_images(self, paths: Sequence[Path]) -> np.ndarray:
         """Encode image files from disk. Returns (N, dim) L2-normalized float32."""

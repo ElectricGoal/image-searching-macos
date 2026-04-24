@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
-import typer
+# faiss-cpu and PyTorch both bundle libomp on macOS arm64. Loading both in the
+# same process aborts with "OMP: Error #15 — multiple copies of the OpenMP
+# runtime". KMP_DUPLICATE_LIB_OK lets libomp tolerate the duplicate load;
+# OMP_NUM_THREADS=1 then prevents the two runtimes from fighting over the same
+# thread pool (without this the process still SIGSEGVs on the first faiss
+# search after torch has been used). Embedding is GPU-bound on MPS and FAISS
+# does exact brute-force search on folders of tens of thousands of images in
+# microseconds, so losing CPU parallelism here is not a meaningful regression.
+import os as _os
+
+_os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+_os.environ.setdefault("OMP_NUM_THREADS", "1")
+
+import typer  # noqa: E402
 
 from imgsearch import __version__
 from imgsearch.commands import clean as clean_cmd
